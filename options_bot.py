@@ -19,7 +19,7 @@ import math
 # ─────────────────────────────────────────────
 
 CLIENT_ID    = "1102522136"
-ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzc3MzUxODY0LCJpYXQiOjE3NzcyNjU0NjQsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMTAyNTIyMTM2In0.UuMRgSUx_09XYHOpMcSmDjt8W8M7G9NzZwnmWWElpD-_QcnVMXxcZ62sGHrQ5PNJFuMuZAguo4mNy9q4mSLYzg"
+ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzc3MzcwNTk3LCJpYXQiOjE3NzcyODQxOTcsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMTAyNTIyMTM2In0.NrGldIAUp9nK6bR7VdUtW1sbYQx0HW0NNNV3UL1J2xu_-bsdUb_ceHMq7WzmsNPU4guR7PsA6a1x6rbvvSFXZw"
 
 # Options Settings
 SYMBOL          = "NIFTY"
