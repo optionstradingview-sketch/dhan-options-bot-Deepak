@@ -182,7 +182,9 @@ class DhanAPI:
 dhan = DhanAPI(CLIENT_ID, ACCESS_TOKEN)
 
 def is_market_open():
-    now = datetime.now()
+    from datetime import timezone, timedelta
+    IST = timezone(timedelta(hours=5, minutes=30))
+    now = datetime.now(IST)
     if now.weekday() > 4:
         return False
     open_time  = now.replace(hour=9,  minute=15, second=0)
