@@ -86,13 +86,14 @@ class DhanAPI:
     def get_nifty_ltp(self):
         """Nifty spot price fetch karo"""
         url = f"{self.BASE_URL}/v2/marketfeed/ltp"
-        payload = {
-            "NSE_INDEX": ["NIFTY 50"]
+       payload = {
+            "IDX_I": ["13"]
         }
         try:
             r = requests.post(url, headers=self.headers, json=payload)
             data = r.json()
-            ltp = data["data"]["NSE_INDEX"]["NIFTY 50"]["last_price"]
+            log.info(f"LTP response: {data}")
+            ltp = data["data"]["IDX_I"]["13"]["last_price"]
             return float(ltp)
         except Exception as e:
             log.error(f"LTP fetch error: {e}")
