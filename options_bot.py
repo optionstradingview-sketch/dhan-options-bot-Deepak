@@ -67,13 +67,13 @@ def get_atm_strike(ltp):
     return round(ltp / STRIKE_MULTIPLE) * STRIKE_MULTIPLE
 
 def get_weekly_expiry():
-    now   = ist_now()
-    days  = (3 - now.weekday()) % 7
+    now  = ist_now()
+    days = (3 - now.weekday()) % 7
     if days == 0 and now.hour >= 15:
         days = 7
     expiry = now + timedelta(days=days)
-    # Dhan format: 2026-04-30
-    return expiry.strftime("%Y-%m-%d")
+    # ✅ FIXED: Dhan ka sahi format — e.g. "30-Apr-2026"
+    return expiry.strftime("%d-%b-%Y")
 
 def dhan_headers():
     return {
