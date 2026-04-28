@@ -67,13 +67,30 @@ def get_atm_strike(ltp):
     return round(ltp / STRIKE_MULTIPLE) * STRIKE_MULTIPLE
 
 def get_weekly_expiry():
-    now  = ist_now()
-    days = (3 - now.weekday()) % 7
+    """Dhan se sahi expiry list fetch karo"""
+    url = "https://api.dhan.co/v2/optionchain/expirylist"
+    payload = {
+        "UnderlyingScrip": 13,
+        "UnderlyingSeg": "IDX_I"
+    }
+    try:
+        r = requests.post(url, headers=dhan_headers(), json=payload, timeout=10)
+        data = r.json()
+        log.info(f"Expiry list: {data}")
+        expiries = data.get("data", [])
+        if expiries:
+            # Pehli (nearest) expiry lo
+            return expiries[0]
+    except Exception as e:
+        log.error(f"Expiry fetch error: {e}")
+    
+    # Fallback: manual calculate
+    now   = ist_now()
+    days  = (3 - now.weekday()) % 7
     if days == 0 and now.hour >= 15:
         days = 7
     expiry = now + timedelta(days=days)
-    # ✅ FIXED: Dhan ka sahi format — e.g. "30-Apr-2026"
-    return expiry.strftime("%d-%b-%Y")
+    return expiry.strftime("%Y-%m-%d")
 
 def dhan_headers():
     return {
