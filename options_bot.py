@@ -72,7 +72,8 @@ def get_weekly_expiry():
     if days == 0 and now.hour >= 15:
         days = 7
     expiry = now + timedelta(days=days)
-    return expiry.strftime("%d%b%y").upper()
+    # Dhan format: 2026-04-30
+    return expiry.strftime("%Y-%m-%d")
 
 def dhan_headers():
     return {
