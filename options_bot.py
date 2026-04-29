@@ -121,19 +121,38 @@ def get_option_security_id(strike, option_type, expiry):
         
         log.info(f"Total strikes in OC: {len(oc_list)}")
         
+        # Log first item to understand structure
+        if oc_list:
+            log.info(f"First OC item type: {type(oc_list[0])} | value: {str(oc_list[0])[:200]}")
+        
         for item in oc_list:
+            # Skip if not dict
+            if not isinstance(item, dict):
+                continue
+            
             sp = item.get("strike_price", item.get("strikePrice", 0))
-            if int(float(sp)) == int(strike):
+            try:
+                sp_int = int(float(str(sp)))
+            except:
+                continue
+                
+            if sp_int == int(strike):
                 # CE ya PE data
                 opt_key = option_type.upper()
                 opt_data = item.get(opt_key, {})
+                
+                if not isinstance(opt_data, dict):
+                    opt_data = {}
+                
                 if opt_data:
                     sid    = str(opt_data.get("security_id", opt_data.get("securityId", "")))
                     symbol = opt_data.get("trading_symbol", opt_data.get("tradingSymbol", f"NIFTY{strike}{option_type}"))
                     log.info(f"✅ Found: {symbol} | securityId: {sid}")
                     return sid, symbol
+                else:
+                    log.error(f"opt_data empty for {strike}{option_type}. Item keys: {list(item.keys())}")
 
-        log.error(f"Option not found: {strike}{option_type} {expiry}. Raw keys: {list(oc_data.keys())}")
+        log.error(f"Option not found: {strike}{option_type} {expiry}")
         return None, None
     except Exception as e:
         log.error(f"Option chain error: {e}")
