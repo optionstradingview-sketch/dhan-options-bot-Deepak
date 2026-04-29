@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 # ─────────────────────────────────────────────
 
 CLIENT_ID    = "1102522136"
-ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzc3NDM1ODE1LCJpYXQiOjE3NzczNDk0MTUsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMTAyNTIyMTM2In0.Lgpo4Db-4t2sktFuCakxUEohb0assYBx-m66dldHDNVcTKmoTIEXRmJh1hG-NCADlqvJPGe4qs-9XHSrEooTfg"
+ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzc3NTIyMDA4LCJpYXQiOjE3Nzc0MzU2MDgsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMTAyNTIyMTM2In0._aLJp7T1nEm-ykAIYWSwsci0n2af6GRfgq_5Nsfnp7I6yyNY7suEZBGBxsJFNpeu4TGD8oxADwkc7V6ItEiiLA"
 
 LOT_SIZE        = 65
 LOTS            = 1
@@ -115,25 +115,30 @@ def get_option_security_id(strike, option_type, expiry):
         data = r.json()
         log.info(f"Option chain response keys: {list(data.keys())}")
 
-        # Parse option chain
-        chains = data.get("data", {})
-        if isinstance(chains, list):
-            items = chains
-        elif isinstance(chains, dict):
-            items = chains.get("oc", chains.get("optionChain", []))
+        # Dhan option chain format
+        oc_data = data.get("data", {})
+        
+        # CE aur PE lists alag hoti hain
+        ce_list = oc_data.get("CE", [])
+        pe_list = oc_data.get("PE", [])
+        
+        if option_type.upper() == "CE":
+            items = ce_list
         else:
-            items = []
-
+            items = pe_list
+        
+        log.info(f"Total {option_type} options found: {len(items)}")
+        
         for item in items:
-            sp = item.get("strikePrice", item.get("strike_price", 0))
-            ot = item.get("optionType",  item.get("option_type", ""))
-            if int(sp) == int(strike) and ot.upper() == option_type.upper():
-                sid    = item.get("securityId", item.get("security_id"))
-                symbol = item.get("tradingSymbol", item.get("trading_symbol", ""))
-                log.info(f"Found: {symbol} | securityId: {sid}")
-                return str(sid), symbol
+            # Dhan format mein strike price check
+            sp = item.get("strikePrice", 0)
+            if int(float(sp)) == int(strike):
+                sid    = str(item.get("securityId", ""))
+                symbol = item.get("tradingSymbol", "")
+                log.info(f"✅ Found: {symbol} | securityId: {sid}")
+                return sid, symbol
 
-        log.error(f"Option not found: {strike}{option_type} {expiry}. Raw: {data}")
+        log.error(f"Option not found: {strike}{option_type} {expiry}. Raw keys: {list(oc_data.keys())}")
         return None, None
     except Exception as e:
         log.error(f"Option chain error: {e}")
