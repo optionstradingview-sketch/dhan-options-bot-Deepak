@@ -115,28 +115,23 @@ def get_option_security_id(strike, option_type, expiry):
         data = r.json()
         log.info(f"Option chain response keys: {list(data.keys())}")
 
-        # Dhan option chain format
+        # Dhan option chain: data -> oc -> list of strikes
         oc_data = data.get("data", {})
+        oc_list = oc_data.get("oc", [])
         
-        # CE aur PE lists alag hoti hain
-        ce_list = oc_data.get("CE", [])
-        pe_list = oc_data.get("PE", [])
+        log.info(f"Total strikes in OC: {len(oc_list)}")
         
-        if option_type.upper() == "CE":
-            items = ce_list
-        else:
-            items = pe_list
-        
-        log.info(f"Total {option_type} options found: {len(items)}")
-        
-        for item in items:
-            # Dhan format mein strike price check
-            sp = item.get("strikePrice", 0)
+        for item in oc_list:
+            sp = item.get("strike_price", item.get("strikePrice", 0))
             if int(float(sp)) == int(strike):
-                sid    = str(item.get("securityId", ""))
-                symbol = item.get("tradingSymbol", "")
-                log.info(f"✅ Found: {symbol} | securityId: {sid}")
-                return sid, symbol
+                # CE ya PE data
+                opt_key = option_type.upper()
+                opt_data = item.get(opt_key, {})
+                if opt_data:
+                    sid    = str(opt_data.get("security_id", opt_data.get("securityId", "")))
+                    symbol = opt_data.get("trading_symbol", opt_data.get("tradingSymbol", f"NIFTY{strike}{option_type}"))
+                    log.info(f"✅ Found: {symbol} | securityId: {sid}")
+                    return sid, symbol
 
         log.error(f"Option not found: {strike}{option_type} {expiry}. Raw keys: {list(oc_data.keys())}")
         return None, None
