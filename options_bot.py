@@ -1,6 +1,6 @@
 """
-DHAN NIFTY OPTIONS AUTO TRADING BOT v2
-TradingView Webhook -> Dhan API -> Auto Trade
+DHAN NIFTY OPTIONS AUTO TRADING BOT v3
+TradingView -> Dhan API -> Auto Trade
 """
 
 from flask import Flask, request, jsonify
@@ -8,262 +8,182 @@ import requests
 import logging
 from datetime import datetime, timedelta, timezone
 
-# ─────────────────────────────────────────────
-#   SETTINGS
-# ─────────────────────────────────────────────
-
+# ── SETTINGS ──────────────────────────────────────
 CLIENT_ID    = "1102522136"
 ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzc3NTIyMDA4LCJpYXQiOjE3Nzc0MzU2MDgsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMTAyNTIyMTM2In0._aLJp7T1nEm-ykAIYWSwsci0n2af6GRfgq_5Nsfnp7I6yyNY7suEZBGBxsJFNpeu4TGD8oxADwkc7V6ItEiiLA"
+LOT_SIZE     = 65
+QUANTITY     = LOT_SIZE
+SECRET       = "mywebhook2024secret"
+MAX_TRADES   = 5
+STRIKE_STEP  = 50
+# ──────────────────────────────────────────────────
 
-LOT_SIZE        = 65
-LOTS            = 1
-QUANTITY        = LOT_SIZE * LOTS
-STRIKE_MULTIPLE = 50
-WEBHOOK_SECRET  = "mywebhook2024secret"
-MAX_TRADES      = 5
-
-# ─────────────────────────────────────────────
-#   LOGGING
-# ─────────────────────────────────────────────
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s",
-    handlers=[logging.StreamHandler()]
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 log = logging.getLogger()
-
-# ─────────────────────────────────────────────
-#   STATE
-# ─────────────────────────────────────────────
-
-class State:
-    position    = None
-    entry_price = 0
-    security_id = None
-    trades      = 0
-    pnl         = 0
-
-state = State()
-
-# ─────────────────────────────────────────────
-#   HELPERS
-# ─────────────────────────────────────────────
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
-def ist_now():
+class State:
+    position    = None
+    security_id = None
+    trades      = 0
+
+state = State()
+
+def now_ist():
     return datetime.now(IST)
 
 def is_market_open():
-    now = ist_now()
-    if now.weekday() > 4:
-        return False
-    o = now.replace(hour=9,  minute=15, second=0, microsecond=0)
-    c = now.replace(hour=15, minute=20, second=0, microsecond=0)
-    return o <= now <= c
+    n = now_ist()
+    if n.weekday() > 4: return False
+    o = n.replace(hour=9,  minute=15, second=0, microsecond=0)
+    c = n.replace(hour=15, minute=20, second=0, microsecond=0)
+    return o <= n <= c
 
-def get_atm_strike(ltp):
-    return round(ltp / STRIKE_MULTIPLE) * STRIKE_MULTIPLE
+def atm(price):
+    return round(price / STRIKE_STEP) * STRIKE_STEP
 
-def get_weekly_expiry():
-    """Dhan se sahi expiry list fetch karo"""
-    url = "https://api.dhan.co/v2/optionchain/expirylist"
-    payload = {
-        "UnderlyingScrip": 13,
-        "UnderlyingSeg": "IDX_I"
-    }
-    try:
-        r = requests.post(url, headers=dhan_headers(), json=payload, timeout=10)
-        data = r.json()
-        log.info(f"Expiry list: {data}")
-        expiries = data.get("data", [])
-        if expiries:
-            # Pehli (nearest) expiry lo
-            return expiries[0]
-    except Exception as e:
-        log.error(f"Expiry fetch error: {e}")
-    
-    # Fallback: manual calculate
-    now   = ist_now()
-    days  = (3 - now.weekday()) % 7
-    if days == 0 and now.hour >= 15:
-        days = 7
-    expiry = now + timedelta(days=days)
-    return expiry.strftime("%Y-%m-%d")
-
-def dhan_headers():
+def headers():
     return {
         "access-token": ACCESS_TOKEN,
         "client-id":    CLIENT_ID,
         "Content-Type": "application/json"
     }
 
-# ─────────────────────────────────────────────
-#   OPTION CHAIN — Security ID fetch
-# ─────────────────────────────────────────────
-
-def get_option_security_id(strike, option_type, expiry):
-    url = "https://api.dhan.co/v2/optionchain"
-    payload = {
-        "UnderlyingScrip": 13,
-        "UnderlyingSeg":   "IDX_I",
-        "Expiry":          expiry
-    }
+def get_expiry():
+    """Dhan se nearest expiry fetch karo"""
     try:
-        r = requests.post(url, headers=dhan_headers(), json=payload, timeout=10)
+        r = requests.post(
+            "https://api.dhan.co/v2/optionchain/expirylist",
+            headers=headers(),
+            json={"UnderlyingScrip": 13, "UnderlyingSeg": "IDX_I"},
+            timeout=10
+        )
         data = r.json()
-        log.info(f"Option chain response keys: {list(data.keys())}")
+        expiries = data.get("data", [])
+        log.info(f"Expiries: {expiries[:3]}")
+        if expiries:
+            return expiries[0]
+    except Exception as e:
+        log.error(f"Expiry error: {e}")
+    n = now_ist()
+    d = (3 - n.weekday()) % 7 or 7
+    return (n + timedelta(days=d)).strftime("%Y-%m-%d")
 
-        # Dhan option chain: data -> oc -> list of strikes
+def search_security(strike, opt_type, expiry):
+    """Dhan instrument search se security ID lo"""
+    try:
+        # Option symbol format: NIFTY26500CE or NIFTY2650524300CE
+        exp = datetime.strptime(expiry, "%Y-%m-%d")
+        
+        # Try option chain properly
+        r = requests.post(
+            "https://api.dhan.co/v2/optionchain",
+            headers=headers(),
+            json={
+                "UnderlyingScrip": 13,
+                "UnderlyingSeg": "IDX_I", 
+                "Expiry": expiry
+            },
+            timeout=10
+        )
+        data = r.json()
+        log.info(f"OC response: {str(data)[:300]}")
+        
         oc_data = data.get("data", {})
-        oc_list = oc_data.get("oc", [])
+        oc      = oc_data.get("oc", [])
         
-        log.info(f"Total strikes in OC: {len(oc_list)}")
+        log.info(f"OC length: {len(oc)}, first item: {str(oc[0]) if oc else 'empty'}")
         
-        # Log first item to understand structure
-        if oc_list:
-            log.info(f"First OC item type: {type(oc_list[0])} | value: {str(oc_list[0])[:200]}")
-        
-        for item in oc_list:
-            # Skip if not dict
-            if not isinstance(item, dict):
+        for row in oc:
+            if not isinstance(row, dict):
                 continue
-            
-            sp = item.get("strike_price", item.get("strikePrice", 0))
+            sp = row.get("strike_price", row.get("strikePrice", 0))
             try:
-                sp_int = int(float(str(sp)))
+                if int(float(sp)) != int(strike):
+                    continue
             except:
                 continue
-                
-            if sp_int == int(strike):
-                # CE ya PE data
-                opt_key = option_type.upper()
-                opt_data = item.get(opt_key, {})
-                
-                if not isinstance(opt_data, dict):
-                    opt_data = {}
-                
-                if opt_data:
-                    sid    = str(opt_data.get("security_id", opt_data.get("securityId", "")))
-                    symbol = opt_data.get("trading_symbol", opt_data.get("tradingSymbol", f"NIFTY{strike}{option_type}"))
-                    log.info(f"✅ Found: {symbol} | securityId: {sid}")
-                    return sid, symbol
-                else:
-                    log.error(f"opt_data empty for {strike}{option_type}. Item keys: {list(item.keys())}")
-
-        log.error(f"Option not found: {strike}{option_type} {expiry}")
+            
+            opt = row.get(opt_type.upper(), row.get(opt_type.lower(), {}))
+            if not isinstance(opt, dict):
+                continue
+            
+            sid = str(opt.get("security_id", opt.get("securityId", "")))
+            sym = opt.get("trading_symbol", opt.get("tradingSymbol", f"NIFTY{strike}{opt_type}"))
+            if sid:
+                log.info(f"✅ Found: {sym} sid={sid}")
+                return sid, sym
+        
+        log.error(f"Not found: {strike}{opt_type} {expiry}")
         return None, None
+        
     except Exception as e:
-        log.error(f"Option chain error: {e}")
+        log.error(f"Search error: {e}")
         return None, None
 
-# ─────────────────────────────────────────────
-#   ORDER
-# ─────────────────────────────────────────────
-
-def place_order(security_id, txn_type, symbol):
-    url = "https://api.dhan.co/v2/orders"
-    payload = {
-        "dhanClientId":    CLIENT_ID,
-        "transactionType": txn_type,
-        "exchangeSegment": "NSE_FNO",
-        "productType":     "INTRADAY",
-        "orderType":       "MARKET",
-        "validity":        "DAY",
-        "securityId":      security_id,
-        "quantity":        QUANTITY,
-        "price":           0,
-        "triggerPrice":    0
-    }
+def place_order(sid, txn, symbol):
     try:
-        r    = requests.post(url, headers=dhan_headers(), json=payload, timeout=10)
+        r = requests.post(
+            "https://api.dhan.co/v2/orders",
+            headers=headers(),
+            json={
+                "dhanClientId":    CLIENT_ID,
+                "transactionType": txn,
+                "exchangeSegment": "NSE_FNO",
+                "productType":     "INTRADAY",
+                "orderType":       "MARKET",
+                "validity":        "DAY",
+                "securityId":      sid,
+                "quantity":        QUANTITY,
+                "price":           0,
+                "triggerPrice":    0
+            },
+            timeout=10
+        )
         data = r.json()
         log.info(f"Order response: {data}")
-        oid  = data.get("orderId", data.get("data", {}).get("orderId"))
-        log.info(f"✅ Order placed! {txn_type} {symbol} | ID: {oid}")
+        oid = data.get("orderId") or data.get("data", {}).get("orderId")
+        log.info(f"✅ {txn} {symbol} | orderId: {oid}")
         return oid
     except Exception as e:
         log.error(f"Order error: {e}")
         return None
 
-# ─────────────────────────────────────────────
-#   CLOSE POSITION
-# ─────────────────────────────────────────────
-
-def close_position():
+def close_pos():
     if not state.position or not state.security_id:
-        log.info("No open position to close")
+        log.info("No position to close")
         return
-    log.info(f"Closing {state.position} position...")
     place_order(state.security_id, "SELL", state.position)
-    state.position    = None
-    state.entry_price = 0
-    state.security_id = None
+    state.position = state.security_id = None
 
-# ─────────────────────────────────────────────
-#   EXECUTE BUY (CE)
-# ─────────────────────────────────────────────
+def buy_ce(price):
+    if state.trades >= MAX_TRADES: return {"status": "rejected", "reason": "max trades"}
+    if not is_market_open():       return {"status": "rejected", "reason": "market closed"}
+    if state.position: close_pos()
+    strike = atm(price)
+    expiry = get_expiry()
+    log.info(f"BUY CE | price={price} strike={strike} expiry={expiry}")
+    sid, sym = search_security(strike, "CE", expiry)
+    if not sid: return {"status": "error", "reason": "CE not found"}
+    oid = place_order(sid, "BUY", sym)
+    if not oid: return {"status": "error", "reason": "order failed"}
+    state.position = "CE"; state.security_id = sid; state.trades += 1
+    return {"status": "success", "action": "CE bought", "strike": strike, "symbol": sym}
 
-def execute_buy(nifty_price):
-    if state.trades >= MAX_TRADES:
-        return {"status": "rejected", "reason": "max trades reached"}
-    if not is_market_open():
-        return {"status": "rejected", "reason": "market closed"}
-    if state.position:
-        close_position()
-
-    strike = get_atm_strike(nifty_price)
-    expiry = get_weekly_expiry()
-    log.info(f"BUY CE | Nifty: {nifty_price} | Strike: {strike} | Expiry: {expiry}")
-
-    sid, symbol = get_option_security_id(strike, "CE", expiry)
-    if not sid:
-        return {"status": "error", "reason": "CE option not found"}
-
-    oid = place_order(sid, "BUY", symbol)
-    if not oid:
-        return {"status": "error", "reason": "Order failed"}
-
-    state.position    = "CE"
-    state.security_id = sid
-    state.trades     += 1
-    log.info(f"🟢 CE BOUGHT | {symbol} | Strike: {strike}")
-    return {"status": "success", "action": "CE bought", "strike": strike, "symbol": symbol}
-
-# ─────────────────────────────────────────────
-#   EXECUTE SELL (PE)
-# ─────────────────────────────────────────────
-
-def execute_sell(nifty_price):
-    if state.trades >= MAX_TRADES:
-        return {"status": "rejected", "reason": "max trades reached"}
-    if not is_market_open():
-        return {"status": "rejected", "reason": "market closed"}
-    if state.position:
-        close_position()
-
-    strike = get_atm_strike(nifty_price)
-    expiry = get_weekly_expiry()
-    log.info(f"BUY PE | Nifty: {nifty_price} | Strike: {strike} | Expiry: {expiry}")
-
-    sid, symbol = get_option_security_id(strike, "PE", expiry)
-    if not sid:
-        return {"status": "error", "reason": "PE option not found"}
-
-    oid = place_order(sid, "BUY", symbol)
-    if not oid:
-        return {"status": "error", "reason": "Order failed"}
-
-    state.position    = "PE"
-    state.security_id = sid
-    state.trades     += 1
-    log.info(f"🔴 PE BOUGHT | {symbol} | Strike: {strike}")
-    return {"status": "success", "action": "PE bought", "strike": strike, "symbol": symbol}
-
-# ─────────────────────────────────────────────
-#   FLASK APP
-# ─────────────────────────────────────────────
+def buy_pe(price):
+    if state.trades >= MAX_TRADES: return {"status": "rejected", "reason": "max trades"}
+    if not is_market_open():       return {"status": "rejected", "reason": "market closed"}
+    if state.position: close_pos()
+    strike = atm(price)
+    expiry = get_expiry()
+    log.info(f"BUY PE | price={price} strike={strike} expiry={expiry}")
+    sid, sym = search_security(strike, "PE", expiry)
+    if not sid: return {"status": "error", "reason": "PE not found"}
+    oid = place_order(sid, "BUY", sym)
+    if not oid: return {"status": "error", "reason": "order failed"}
+    state.position = "PE"; state.security_id = sid; state.trades += 1
+    return {"status": "success", "action": "PE bought", "strike": strike, "symbol": sym}
 
 app = Flask(__name__)
 
@@ -271,32 +191,22 @@ app = Flask(__name__)
 def webhook():
     try:
         data   = request.get_json(force=True)
-        log.info(f"📡 Webhook: {data}")
-
-        if data.get("secret") != WEBHOOK_SECRET:
+        log.info(f"📡 {data}")
+        if data.get("secret") != SECRET:
             return jsonify({"status": "unauthorized"}), 401
-
         signal = data.get("signal", "").upper()
-        price  = data.get("price")
-        try:
-            price = float(price) if price else None
-        except:
-            price = None
-
+        price  = float(data.get("price", 0) or 0)
         if signal == "BUY":
-            if not price:
-                return jsonify({"status": "error", "reason": "price missing"}), 400
-            result = execute_buy(price)
+            if not price: return jsonify({"status": "error", "reason": "price missing"}), 400
+            result = buy_ce(price)
         elif signal == "SELL":
-            if not price:
-                return jsonify({"status": "error", "reason": "price missing"}), 400
-            result = execute_sell(price)
+            if not price: return jsonify({"status": "error", "reason": "price missing"}), 400
+            result = buy_pe(price)
         elif signal == "EXIT":
-            close_position()
+            close_pos()
             result = {"status": "success", "action": "closed"}
         else:
-            result = {"status": "error", "reason": f"unknown signal: {signal}"}
-
+            result = {"status": "error", "reason": f"unknown: {signal}"}
         return jsonify(result)
     except Exception as e:
         log.error(f"Webhook error: {e}")
@@ -305,22 +215,16 @@ def webhook():
 @app.route("/status")
 def status():
     return jsonify({
-        "status":      "running",
+        "running":     True,
         "position":    state.position,
         "trades":      state.trades,
-        "pnl":         state.pnl,
         "market_open": is_market_open(),
-        "time_ist":    ist_now().strftime("%Y-%m-%d %H:%M:%S")
+        "time_ist":    now_ist().strftime("%H:%M:%S")
     })
 
 @app.route("/")
 def home():
-    return jsonify({"message": "Dhan Options Bot v2 Running! 🚀"})
+    return "Dhan Bot v3 Running!"
 
 if __name__ == "__main__":
-    log.info("=" * 50)
-    log.info("  DHAN OPTIONS BOT v2 — STARTING")
-    log.info(f"  Client ID: {CLIENT_ID}")
-    log.info(f"  Quantity:  {QUANTITY} | Lot Size: {LOT_SIZE}")
-    log.info("=" * 50)
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000)
