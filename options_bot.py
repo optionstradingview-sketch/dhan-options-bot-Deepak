@@ -91,28 +91,28 @@ def search_security(strike, opt_type, expiry):
         log.info(f"OC response: {str(data)[:300]}")
         
         oc_data = data.get("data", {})
-        oc      = oc_data.get("oc", [])
+        oc      = oc_data.get("oc", {})
         
-        log.info(f"OC length: {len(oc)}, first item: {str(oc[0]) if oc else 'empty'}")
+        # OC is a dict: {"17100.000000": {"ce": {...}, "pe": {...}}}
+        log.info(f"OC type: {type(oc)} | keys count: {len(oc)}")
         
-        for row in oc:
-            if not isinstance(row, dict):
-                continue
-            sp = row.get("strike_price", row.get("strikePrice", 0))
+        # Find matching strike
+        for sp_key, opt_data in oc.items():
             try:
-                if int(float(sp)) != int(strike):
+                if int(float(sp_key)) != int(strike):
                     continue
             except:
                 continue
             
-            opt = row.get(opt_type.upper(), row.get(opt_type.lower(), {}))
+            # Get CE or PE data
+            opt = opt_data.get(opt_type.lower(), {})
             if not isinstance(opt, dict):
                 continue
             
             sid = str(opt.get("security_id", opt.get("securityId", "")))
             sym = opt.get("trading_symbol", opt.get("tradingSymbol", f"NIFTY{strike}{opt_type}"))
             if sid:
-                log.info(f"✅ Found: {sym} sid={sid}")
+                log.info(f"✅ Found: {sym} | sid={sid}")
                 return sid, sym
         
         log.error(f"Not found: {strike}{opt_type} {expiry}")
