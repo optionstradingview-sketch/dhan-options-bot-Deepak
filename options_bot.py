@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 # ── SETTINGS ──────────────────────────────────────
 CLIENT_ID    = "1102522136"
-ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJwX2lwIjoiIiwic19pcCI6IiIsImlzcyI6ImRoYW4iLCJwYXJ0bmVySWQiOiIiLCJleHAiOjE3Nzc2MTc3MzIsImlhdCI6MTc3NzUzMTMzMiwidG9rZW5Db25zdW1lclR5cGUiOiJTRUxGIiwid2ViaG9va1VybCI6Imh0dHBzOi8vd2ViLXByb2R1Y3Rpb24tNDRhMGM2LnVwLnJhaWx3YXkuYXBwIiwiZGhhbkNsaWVudElkIjoiMTEwMjUyMjEzNiJ9.8CGyeQLddamiQkXMA7jsz0M2L46-QpwOKZM6QEqJp6vHxM5c_VizRLF6eGoeDK_2sQy8MuBaGxeTv9WBqsuaaw"
+ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzc3NzgyODUyLCJpYXQiOjE3Nzc2OTY0NTIsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMTAyNTIyMTM2In0.GojKknZm41Pxsk01f6AdnAoHKfrYFB8TbGORNFlQQ-Auor4fhyTYdPkv585rXb-Q5AgIAJaTad37JPfMRqAZyA"
 LOT_SIZE     = 65
 QUANTITY     = LOT_SIZE
 SECRET       = "mywebhook2024secret"
