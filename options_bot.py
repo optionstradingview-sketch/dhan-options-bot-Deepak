@@ -40,6 +40,16 @@ def is_market_open():
     c = n.replace(hour=15, minute=20, second=0, microsecond=0)
     return o <= n <= c
 
+def get_my_ip():
+    try:
+        r = requests.get("https://api.ipify.org?format=json", timeout=5)
+        ip = r.json().get("ip")
+        log.info(f"🌐 My Public IP: {ip}")
+        return ip
+    except Exception as e:
+        log.error(f"IP check error: {e}")
+        return None
+
 def atm(price):
     return round(price / STRIKE_STEP) * STRIKE_STEP
 
@@ -51,7 +61,6 @@ def headers():
     }
 
 def get_expiry():
-    """Dhan se nearest expiry fetch karo"""
     try:
         r = requests.post(
             "https://api.dhan.co/v2/optionchain/expirylist",
@@ -71,53 +80,45 @@ def get_expiry():
     return (n + timedelta(days=d)).strftime("%Y-%m-%d")
 
 def search_security(strike, opt_type, expiry):
-    """Dhan instrument search se security ID lo"""
     try:
-        # Option symbol format: NIFTY26500CE or NIFTY2650524300CE
-        exp = datetime.strptime(expiry, "%Y-%m-%d")
-        
-        # Try option chain properly
         r = requests.post(
             "https://api.dhan.co/v2/optionchain",
             headers=headers(),
             json={
                 "UnderlyingScrip": 13,
-                "UnderlyingSeg": "IDX_I", 
+                "UnderlyingSeg": "IDX_I",
                 "Expiry": expiry
             },
             timeout=10
         )
         data = r.json()
         log.info(f"OC response: {str(data)[:300]}")
-        
+
         oc_data = data.get("data", {})
         oc      = oc_data.get("oc", {})
-        
-        # OC is a dict: {"17100.000000": {"ce": {...}, "pe": {...}}}
+
         log.info(f"OC type: {type(oc)} | keys count: {len(oc)}")
-        
-        # Find matching strike
+
         for sp_key, opt_data in oc.items():
             try:
                 if int(float(sp_key)) != int(strike):
                     continue
             except:
                 continue
-            
-            # Get CE or PE data
+
             opt = opt_data.get(opt_type.lower(), {})
             if not isinstance(opt, dict):
                 continue
-            
+
             sid = str(opt.get("security_id", opt.get("securityId", "")))
             sym = opt.get("trading_symbol", opt.get("tradingSymbol", f"NIFTY{strike}{opt_type}"))
             if sid:
                 log.info(f"✅ Found: {sym} | sid={sid}")
                 return sid, sym
-        
+
         log.error(f"Not found: {strike}{opt_type} {expiry}")
         return None, None
-        
+
     except Exception as e:
         log.error(f"Search error: {e}")
         return None, None
@@ -187,6 +188,9 @@ def buy_pe(price):
 
 app = Flask(__name__)
 
+# ── Print IP on startup ──
+get_my_ip()
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     try:
@@ -221,6 +225,11 @@ def status():
         "market_open": is_market_open(),
         "time_ist":    now_ist().strftime("%H:%M:%S")
     })
+
+@app.route("/ip")
+def show_ip():
+    ip = get_my_ip()
+    return jsonify({"public_ip": ip})
 
 @app.route("/")
 def home():
