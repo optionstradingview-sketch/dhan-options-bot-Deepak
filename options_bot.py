@@ -6,11 +6,12 @@ TradingView -> Dhan API -> Auto Trade
 from flask import Flask, request, jsonify
 import requests
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 
 # ── SETTINGS ──────────────────────────────────────
 CLIENT_ID    = "1102522136"
-ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzc3NzgyODUyLCJpYXQiOjE3Nzc2OTY0NTIsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMTAyNTIyMTM2In0.GojKknZm41Pxsk01f6AdnAoHKfrYFB8TbGORNFlQQ-Auor4fhyTYdPkv585rXb-Q5AgIAJaTad37JPfMRqAZyA"
+ACCESS_TOKEN = os.environ.get("ACCESS_TOKEN", "")
 LOT_SIZE     = 65
 QUANTITY     = LOT_SIZE
 SECRET       = "mywebhook2024secret"
@@ -49,6 +50,24 @@ def get_my_ip():
     except Exception as e:
         log.error(f"IP check error: {e}")
         return None
+
+def update_ip_on_dhan():
+    """Automatically update current IP on Dhan portal"""
+    try:
+        ip = get_my_ip()
+        if not ip:
+            return False
+        r = requests.post(
+            "https://api.dhan.co/v2/profile/ipwhitelist",
+            headers=headers(),
+            json={"ipAddress": ip},
+            timeout=10
+        )
+        log.info(f"🔄 IP update response: {r.status_code} | {r.text[:100]}")
+        return True
+    except Exception as e:
+        log.error(f"IP update error: {e}")
+        return False
 
 def atm(price):
     return round(price / STRIKE_STEP) * STRIKE_STEP
@@ -124,26 +143,43 @@ def search_security(strike, opt_type, expiry):
         return None, None
 
 def place_order(sid, txn, symbol):
+    import time
     try:
+        payload = {
+            "dhanClientId":    CLIENT_ID,
+            "transactionType": txn,
+            "exchangeSegment": "NSE_FNO",
+            "productType":     "INTRADAY",
+            "orderType":       "MARKET",
+            "validity":        "DAY",
+            "securityId":      sid,
+            "quantity":        QUANTITY,
+            "price":           0,
+            "triggerPrice":    0
+        }
         r = requests.post(
             "https://api.dhan.co/v2/orders",
             headers=headers(),
-            json={
-                "dhanClientId":    CLIENT_ID,
-                "transactionType": txn,
-                "exchangeSegment": "NSE_FNO",
-                "productType":     "INTRADAY",
-                "orderType":       "MARKET",
-                "validity":        "DAY",
-                "securityId":      sid,
-                "quantity":        QUANTITY,
-                "price":           0,
-                "triggerPrice":    0
-            },
+            json=payload,
             timeout=10
         )
         data = r.json()
         log.info(f"Order response: {data}")
+
+        # If Invalid IP error - auto update IP and retry once
+        if data.get("errorCode") == "DH-905":
+            log.warning("⚠️ Invalid IP - auto updating IP on Dhan and retrying...")
+            update_ip_on_dhan()
+            time.sleep(3)
+            r2 = requests.post(
+                "https://api.dhan.co/v2/orders",
+                headers=headers(),
+                json=payload,
+                timeout=10
+            )
+            data = r2.json()
+            log.info(f"Retry order response: {data}")
+
         oid = data.get("orderId") or data.get("data", {}).get("orderId")
         log.info(f"✅ {txn} {symbol} | orderId: {oid}")
         return oid
@@ -188,8 +224,9 @@ def buy_pe(price):
 
 app = Flask(__name__)
 
-# ── Print IP on startup ──
+# ── Startup: log IP and try to update on Dhan ──
 get_my_ip()
+update_ip_on_dhan()
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
