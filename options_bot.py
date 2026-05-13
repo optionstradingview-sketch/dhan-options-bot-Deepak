@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 # ── SETTINGS ──────────────────────────────────────
 CLIENT_ID    = "1102522136"
-ACCESS_TOKEN = os.environ.get("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzc4NzM5NDYyLCJpYXQiOjE3Nzg2NTMwNjIsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMTAyNTIyMTM2In0.WLNmCzBkJYT-JPjGaX8GYJ3_b-eTKp5xhUMq_8wX9mZCSdWMnxzdkdqjjNtldGuZWjl_E4nWF_WBpRBldUFZTA", "")
+ACCESS_TOKEN = os.environ.get("ACCESS_TOKEN", "")
 LOT_SIZE     = 65
 QUANTITY     = LOT_SIZE
 SECRET       = "mywebhook2024secret"
